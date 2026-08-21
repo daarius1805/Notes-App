@@ -11,24 +11,35 @@ def answer_question(
 ) -> dict[str, Any]:
     if api_key_missing:
         return {
-            "answer": "Gemini is not configured yet. Add your API key to backend/.env to enable note-based answers.",
+            "answer": "I could not generate a full AI answer right now, but your note retrieval is working. Configure Gemini in backend/.env to enable complete answers.",
             "sources": [
                 {"note_id": chunk.get("note_id", "unknown"), "title": chunk.get("note_title", "Unknown note"), "chunk_text": chunk.get("chunk_text", "")}
                 for chunk in context_chunks
             ],
         }
 
-    context = "\n\n".join(chunk.get("chunk_text", "") for chunk in context_chunks if chunk.get("chunk_text"))
+    unique_chunks: list[str] = []
+    seen_texts: set[str] = set()
+    for chunk in context_chunks:
+        chunk_text = (chunk.get("chunk_text") or "").strip()
+        if not chunk_text:
+            continue
+        normalized = " ".join(chunk_text.split()).lower()
+        if normalized in seen_texts:
+            continue
+        seen_texts.add(normalized)
+        unique_chunks.append(chunk_text)
+
+    context = "\n\n".join(unique_chunks)
     if not context:
         return {
             "answer": "I could not find any relevant note context for that question.",
             "sources": [],
         }
 
-    answer = (
-        f"Based on your notes, here is the answer to: {question}\n\n"
-        f"Context:\n{context}"
-    )
+    cleaned_context = " ".join(context.split())
+    short_context = cleaned_context[:700].rstrip()
+    answer = f"From your notes: {short_context}"
     return {
         "answer": answer,
         "sources": [

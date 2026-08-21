@@ -1,12 +1,14 @@
 from typing import Generator
 
+import jwt
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Session, select
 
 from app.database import engine
 from app.models.user import User
-from app.auth.jwt_handler import decode_access_token
+from app.config import settings
 
 security = HTTPBearer()
 
@@ -21,11 +23,28 @@ def get_current_user(
     session: Session = Depends(get_session),
 ) -> User:
     try:
-        user_id = decode_access_token(credentials.credentials)
-    except ValueError as exc:
+        if not settings.SUPABASE_URL:
+            raise ValueError("SUPABASE_URL is not configured")
+
+        jwks_client = jwt.PyJWKClient(f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json")
+        signing_key = jwks_client.get_signing_key_from_jwt(credentials.credentials)
+        payload = jwt.decode(
+            credentials.credentials,
+            signing_key.key,
+            algorithms=["ES256", "RS256"],
+            audience="authenticated",
+        )
+        user_id = payload.get("sub")
+        email = payload.get("email")
+        if not user_id or not email:
+            raise ValueError("Token is missing the Supabase user identity")
+    except (ValueError, jwt.InvalidTokenError, jwt.PyJWKClientError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials") from exc
 
     user = session.exec(select(User).where(User.id == user_id)).first()
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        user = User(id=user_id, email=email)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
     return user

@@ -93,3 +93,16 @@ def test_answer_question_without_gemini_key_returns_structured_response():
     response = answer_question(question="What are my notes about?", context_chunks=[{"chunk_text": "Alpha note"}], api_key_missing=True)
     assert response["answer"]
     assert "not configured" in response["answer"].lower() or "gemini" in response["answer"].lower()
+
+
+def test_answer_question_deduplicates_repeated_chunk_text():
+    response = answer_question(
+        question="What is my name?",
+        context_chunks=[
+            {"chunk_text": "my name is daarius", "note_id": "n1", "note_title": "A"},
+            {"chunk_text": "my name is daarius", "note_id": "n2", "note_title": "B"},
+        ],
+        api_key_missing=False,
+    )
+
+    assert response["answer"].count("my name is daarius") == 1

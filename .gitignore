@@ -5,6 +5,7 @@ backend/**/*.pyc
 backend/.env
 backend/*.db
 backend/*.sqlite3
+frontend/.env
 
 # Node frontend
 frontend/node_modules/

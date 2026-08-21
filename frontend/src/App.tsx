@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import { supabase, supabaseConfigured } from './lib/supabase'
 import { formatDate } from './utils/formatDate'
 
 type Note = {
@@ -10,19 +11,13 @@ type Note = {
   updated_at: string
 }
 
-type Source = {
-  note_id: string
-  title: string
-  chunk_text: string
-}
-
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
 function App() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('demo@example.com')
   const [password, setPassword] = useState('secret123')
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('notes_app_token'))
+  const [token, setToken] = useState<string | null>(null)
   const [notes, setNotes] = useState<Note[]>([])
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
@@ -30,17 +25,7 @@ function App() {
   const [status, setStatus] = useState('Ready')
   const [chatQuestion, setChatQuestion] = useState('')
   const [chatAnswer, setChatAnswer] = useState('')
-  const [chatSources, setChatSources] = useState<Source[]>([])
   const [chatLoading, setChatLoading] = useState(false)
-
-  const setAuthToken = (nextToken: string | null) => {
-    if (nextToken) {
-      localStorage.setItem('notes_app_token', nextToken)
-    } else {
-      localStorage.removeItem('notes_app_token')
-    }
-    setToken(nextToken)
-  }
 
   const loadNotes = async (currentToken = token) => {
     if (!currentToken) {
@@ -72,6 +57,25 @@ function App() {
   }
 
   useEffect(() => {
+    let mounted = true
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) {
+        setToken(session?.access_token ?? null)
+      }
+    })
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setToken(session?.access_token ?? null)
+    })
+
+    return () => {
+      mounted = false
+      data.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
     if (token) {
       void loadNotes(token)
     }
@@ -84,23 +88,24 @@ function App() {
   }
 
   const handleAuth = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/auth/${mode}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
+    if (!supabaseConfigured) {
+      setStatus('Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to frontend/.env')
+      return
+    }
 
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(JSON.stringify(data))
+    try {
+      const result = mode === 'login'
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password })
+
+      if (result.error) {
+        throw result.error
       }
 
       if (mode === 'login') {
-        setAuthToken(data.access_token)
-        setStatus('Login successful. Token received.')
+        setStatus('Login successful.')
       } else {
-        setStatus('Registration successful. You can now log in.')
+        setStatus(result.data.session ? 'Registration successful.' : 'Registration successful. Check your email to confirm your account.')
       }
     } catch (error) {
       setStatus(`Auth failed: ${String(error)}`)
@@ -193,12 +198,10 @@ function App() {
       }
 
       setChatAnswer(data.answer ?? 'No answer returned.')
-      setChatSources(Array.isArray(data.sources) ? data.sources : [])
       setStatus('Question answered.')
       setChatQuestion('')
     } catch (error) {
       setChatAnswer('')
-      setChatSources([])
       setStatus(`Chat failed: ${String(error)}`)
       console.error(error)
     } finally {
@@ -207,12 +210,12 @@ function App() {
   }
 
   const handleLogout = () => {
-    setAuthToken(null)
+    void supabase.auth.signOut()
+    setToken(null)
     resetForm()
     setNotes([])
     setChatQuestion('')
     setChatAnswer('')
-    setChatSources([])
     setStatus('Logged out. Please log in again.')
   }
 
@@ -223,7 +226,7 @@ function App() {
       <main className="app-shell auth-shell">
         <section className="panel auth-panel">
           <h1>Notes App + RAG Bot</h1>
-          <p className="subtitle">Please log in to access your notes.</p>
+          <p className="subtitle">Sign in with your Supabase account to access your notes.</p>
 
           <div className="mode-toggle">
             <button className={mode === 'login' ? 'selected' : ''} onClick={() => setMode('login')} type="button">
@@ -345,19 +348,7 @@ function App() {
 
           <div className="chat-output">
             {chatAnswer ? (
-              <>
-                <p className="chat-answer">{chatAnswer}</p>
-                {chatSources.length > 0 && (
-                  <ul className="source-list">
-                    {chatSources.map((source) => (
-                      <li key={`${source.note_id}-${source.chunk_text}`} className="source-card">
-                        <strong>{source.title}</strong>
-                        <span>{source.chunk_text}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
+              <p className="chat-answer">{chatAnswer}</p>
             ) : (
               <p className="empty-chat">Ask about your notes and the app will answer from the relevant chunks.</p>
             )}

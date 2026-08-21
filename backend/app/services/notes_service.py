@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session, delete, select
 
 from app.models.note import Note
 from app.models.note_chunk import NoteChunk
@@ -61,5 +61,8 @@ def update_note(session: Session, note_id: str, user_id: str, title: str | None,
 
 def delete_note(session: Session, note_id: str, user_id: str) -> None:
     note = get_note_for_user(session, note_id, user_id)
+
+    # Remove chunk rows first to avoid FK nulling on environments without delete cascade.
+    session.exec(delete(NoteChunk).where(NoteChunk.note_id == note.id))
     session.delete(note)
     session.commit()

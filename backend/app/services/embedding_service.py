@@ -19,10 +19,13 @@ def embed_texts(texts: list[str]) -> list[list[float] | None]:
     if client is None:
         return [None for _ in texts]
 
-    response = client.models.embed_content(
-        model=settings.GEMINI_EMBEDDING_MODEL,
-        contents=texts,
-    )
+    try:
+        response = client.models.embed_content(
+            model=settings.GEMINI_EMBEDDING_MODEL,
+            contents=texts,
+        )
+    except Exception:
+        return [None for _ in texts]
 
     embeddings = response.embeddings or []
     result: list[list[float] | None] = []

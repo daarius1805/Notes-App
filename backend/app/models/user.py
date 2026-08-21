@@ -11,7 +11,7 @@ class User(SQLModel, table=True):
 
     id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex, primary_key=True)
     email: str = Field(index=True, unique=True, nullable=False)
-    password_hash: str = Field(nullable=False)
+    password_hash: str = Field(default="supabase-managed", nullable=False)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
     notes: list["Note"] = Relationship(back_populates="owner")
