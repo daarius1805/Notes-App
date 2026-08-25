@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,7 +10,15 @@ from app.routers.auth_router import router as auth_router
 from app.routers.chat_router import router as chat_router
 from app.routers.notes_router import router as notes_router
 
-app = FastAPI(title="Notes RAG API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs once on startup — after uvicorn has bound the port.
+    create_db_and_tables()
+    yield
+
+
+app = FastAPI(title="Notes RAG API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,8 +31,6 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(notes_router)
 app.include_router(chat_router)
-
-create_db_and_tables()
 
 
 @app.get("/")
