@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from google import genai
+
+from app.config import settings
+
 
 def answer_question(
     *,
@@ -18,6 +22,7 @@ def answer_question(
             ],
         }
 
+    # De-duplicate chunks
     unique_chunks: list[str] = []
     seen_texts: set[str] = set()
     for chunk in context_chunks:
@@ -37,13 +42,34 @@ def answer_question(
             "sources": [],
         }
 
-    cleaned_context = " ".join(context.split())
-    short_context = cleaned_context[:700].rstrip()
-    answer = f"From your notes: {short_context}"
+    prompt = f"""You are a helpful assistant that answers questions based exclusively on the user's personal notes provided below.
+
+Use only the information from the notes to answer. If the notes do not contain enough information to answer the question, say so clearly. Do not invent facts.
+
+--- USER NOTES (context) ---
+{context}
+--- END OF NOTES ---
+
+Question: {question}
+
+Answer:"""
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    response = client.models.generate_content(
+        model=settings.GEMINI_CHAT_MODEL,
+        contents=prompt,
+    )
+
+    answer = (response.text or "").strip() or "No answer returned."
+
     return {
         "answer": answer,
         "sources": [
-            {"note_id": chunk.get("note_id", "unknown"), "title": chunk.get("note_title", "Unknown note"), "chunk_text": chunk.get("chunk_text", "")}
+            {
+                "note_id": chunk.get("note_id", "unknown"),
+                "title": chunk.get("note_title", "Unknown note"),
+                "chunk_text": chunk.get("chunk_text", ""),
+            }
             for chunk in context_chunks
         ],
     }

@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: notes-app-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # Set these in the Render dashboard — do NOT commit real values here.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-2.5-flash-lite
+      - key: GEMINI_EMBEDDING_MODEL
+        value: gemini-embedding-001
+      # Set this to your Vercel deployment URL after deploying the frontend.
+      # Example: https://your-app.vercel.app
+      # You can also add multiple origins separated by commas:
+      # https://your-app.vercel.app,https://your-custom-domain.com
+      - key: ALLOWED_ORIGINS
+        sync: false
