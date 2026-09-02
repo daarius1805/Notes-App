@@ -28,6 +28,7 @@ def get_current_user(
 
         jwks_client = jwt.PyJWKClient(f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json")
         signing_key = jwks_client.get_signing_key_from_jwt(credentials.credentials)
+        
         payload = jwt.decode(
             credentials.credentials,
             signing_key.key,
@@ -39,7 +40,7 @@ def get_current_user(
         if not user_id or not email:
             raise ValueError("Token is missing the Supabase user identity")
     except (ValueError, jwt.InvalidTokenError, jwt.PyJWKClientError) as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials") from exc
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid credentials: {str(exc)}") from exc
 
     user = session.exec(select(User).where(User.id == user_id)).first()
     if user is None:
